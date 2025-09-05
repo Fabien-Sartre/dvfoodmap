@@ -1,9 +1,8 @@
-//
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>DV Food map 🥗​🥙​🍱​🍔​🍕​</title>
+  <title>DV Food map 🥗​🥙​🍱​🍔​🍕</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -12,17 +11,45 @@
       --panel-width: 380px;
       --brand: #0f6fff;
       --muted: #6b7280;
+      --bg: #ffffff;
     }
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     #app { height: 100%; display: grid; grid-template-columns: 1fr; }
     #map { height: 100%; width: 100%; }
     .leaflet-popup-content { font-size: 14px; line-height: 1.35; }
+
+    /* Title chip */
     .subtitle {
       position: absolute; z-index: 1000; left: 12px; top: 12px;
       background: rgba(255,255,255,.95); padding: 8px 12px; border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,.08); font-size: 14px;
     }
-    /* Side panel */
+
+    /* Filters box (compact, left) */
+    #filters {
+      position: absolute; z-index: 1001; left: 12px; top: 58px;
+      width: 300px; background: var(--bg); border: 1px solid #eee; border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      padding: 12px; display: grid; gap: 10px;
+    }
+    #filters h3 { margin: 0 0 4px; font-size: 14px; }
+    #filters .row { display: grid; gap: 6px; }
+    #filters input[type="text"], #filters select {
+      width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;
+    }
+    #filters .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    #filters .chip {
+      cursor: pointer; user-select: none;
+      background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 999px; padding: 4px 10px; font-size: 12px;
+    }
+    #filters .chip.active { background: #e8f0ff; border-color: #c7dcff; color: #0b57d0; }
+    #filters .actions { display: flex; gap: 8px; align-items: center; }
+    #filters button {
+      border: 0; background: #0b57d0; color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    }
+    #filters .reset { background: #f3f4f6; color: #111827; }
+
+    /* Side panel (details) */
     #panel {
       position: absolute; right: 0; top: 0; height: 100%; width: var(--panel-width);
       background: #fff; box-shadow: -8px 0 24px rgba(0,0,0,.08);
@@ -46,6 +73,7 @@
     .review { padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
     .review:last-child { border-bottom: 0; }
     .muted { color: var(--muted); }
+
     /* Dim non-selected markers */
     .dimmed { filter: grayscale(100%) opacity(0.35); }
   </style>
@@ -53,7 +81,46 @@
 <body>
   <div id="app">
     <div id="map"></div>
-    <div class="subtitle">DV Food map 🥗​🥙​🍱​🍔​🍕​</div>
+
+    <div class="subtitle">DV Food map 🥗​🥙​🍱​🍔​🍕</div>
+
+    <!-- Filters box -->
+    <div id="filters">
+      <h3>Filtres</h3>
+      <div class="row">
+        <input id="f-search" type="text" placeholder="Rechercher (nom, adresse)…" />
+      </div>
+      <div class="row">
+        <label for="f-distance">Temps depuis le bureau</label>
+        <select id="f-distance">
+          <option value="">Tous</option>
+          <option value="5">≤ 5 min</option>
+          <option value="10">≤ 10 min</option>
+          <option value="15">≤ 15 min</option>
+          <option value="20">≤ 20 min</option>
+          <option value="30">≤ 30 min</option>
+        </select>
+      </div>
+      <div class="row">
+        <div>Prix</div>
+        <div id="f-price" class="chips">
+          <div class="chip" data-val="€">€</div>
+          <div class="chip" data-val="€€">€€</div>
+          <div class="chip" data-val="€€€">€€€</div>
+        </div>
+      </div>
+      <div class="row">
+        <label for="f-food">Type de cuisine</label>
+        <select id="f-food">
+          <option value="">Toutes</option>
+          <!-- options filled dynamically -->
+        </select>
+      </div>
+      <div class="actions">
+        <button id="f-zoom">Zoom sur les résultats</button>
+        <button id="f-reset" class="reset">Réinitialiser</button>
+      </div>
+    </div>
 
     <!-- Side panel -->
     <aside id="panel">
@@ -75,7 +142,7 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <script>
-    // 👉 Replace with your "Publish to the web (CSV)" link of the mymaps_export tab
+    // 👉 Replace with your Publish-to-web CSV of 'mymaps_export'
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRE7LBwALNw3m9kW1XrGh5QnvFuMI2Z4TT8aAI8JA7v4S8WAb8BUVoKzCZSFMwLivFVBjsKjWZUVxPg/pub?gid=1935701035&single=true&output=csv";
 
     // --- Map & base layer ---
@@ -90,21 +157,22 @@
       maxZoom: 20
     }).addTo(map);
 
-    // Office marker (distinct)
+    // Office marker
     const officeMarker = L.circleMarker([office.lat, office.lng], {
       radius: 8, color: '#d33', fillColor: '#d33', fillOpacity: 1, weight: 2
     }).addTo(map).bindPopup(`<b>${office.name}</b>`);
     enableHoverPinBehavior(officeMarker);
 
     // State
-    let markers = [];          // { marker, data }
-    let selectedMarker = null; // the pinned one
+    const all = { data: [], markers: [] };
+    let selectedMarker = null;
 
     // Helpers
     const toNum = v => {
       const n = parseFloat(String(v).replace(',', '.'));
       return Number.isFinite(n) ? n : null;
     };
+    const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
 
     function simplePopup(row) {
       const name = row.restaurant_name || '';
@@ -120,12 +188,10 @@
         </div>`;
     }
 
-    // Accepts plain text with \n OR preformatted HTML; detects tags loosely
     function renderReviews(htmlOrText) {
       if (!htmlOrText) return '<div class="muted">Aucun avis pour le moment.</div>';
       const hasTag = /<\w+[^>]*>/.test(htmlOrText);
-      if (hasTag) return htmlOrText; // already HTML from your export/script
-      // convert plaintext with newlines into paragraphs
+      if (hasTag) return htmlOrText;
       const safe = String(htmlOrText).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       return safe.split(/\n{2,}/).map(block => `<div class="review">${block.replace(/\n/g,'<br/>')}</div>`).join('');
     }
@@ -150,36 +216,27 @@
 
     function clearSelection() {
       selectedMarker = null;
-      markers.forEach(m => m.marker.getElement()?.classList.remove('dimmed'));
+      all.markers.forEach(m => m.marker.getElement()?.classList.remove('dimmed'));
       document.getElementById('panel').classList.remove('active');
-      // close all popups except maybe office if pinned (we treat office same way)
       map.closePopup();
     }
 
     document.getElementById('p-close').addEventListener('click', clearSelection);
     map.on('click', (e) => {
-      // clicking empty map area clears selection
       if (!e.originalEvent.target.closest('.leaflet-marker-icon') &&
           !e.originalEvent.target.closest('.leaflet-popup')) {
         clearSelection();
       }
     });
 
-    // Hover-to-open & click-to-pin behavior for any marker
     function enableHoverPinBehavior(marker, row = null) {
       marker._pinned = false;
 
-      marker.on('mouseover', function () {
-        if (!this._pinned) this.openPopup();
-      });
-      marker.on('mouseout', function () {
-        if (!this._pinned) this.closePopup();
-      });
+      marker.on('mouseover', function () { if (!this._pinned) this.openPopup(); });
+      marker.on('mouseout',  function () { if (!this._pinned) this.closePopup(); });
       marker.on('click', function (ev) {
-        // Toggle pin
         const nowPinned = !this._pinned;
-        // Unpin all markers
-        markers.forEach(m => m.marker._pinned = false);
+        all.markers.forEach(m => m.marker._pinned = false);
         officeMarker._pinned = false;
 
         if (nowPinned) {
@@ -187,36 +244,133 @@
           this.openPopup();
 
           // Dim others
-          markers.forEach(m => {
+          all.markers.forEach(m => {
             const el = m.marker.getElement();
             if (!el) return;
-            if (m.marker !== this) el.classList.add('dimmed');
+            if (m.marker !== this && map.hasLayer(m.marker)) el.classList.add('dimmed');
             else el.classList.remove('dimmed');
           });
 
-          // Panel details for restaurants only
           if (row) updatePanel(row);
           selectedMarker = this;
         } else {
-          // Unpin → undim all & hide panel
           clearSelection();
         }
-
-        // Prevent map click from also firing
         ev.originalEvent?.stopPropagation?.();
       });
     }
 
-    // Load CSV & plot restaurant markers
+    // ---- Filters ----
+    const elSearch   = document.getElementById('f-search');
+    const elDistance = document.getElementById('f-distance');
+    const elPriceBox = document.getElementById('f-price');
+    const elFood     = document.getElementById('f-food');
+    const elZoomBtn  = document.getElementById('f-zoom');
+    const elResetBtn = document.getElementById('f-reset');
+
+    function getActivePrices() {
+      return Array.from(elPriceBox.querySelectorAll('.chip.active')).map(ch => ch.dataset.val);
+    }
+    elPriceBox.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      chip.classList.toggle('active');
+      applyFilters();
+    });
+
+    [elSearch, elDistance, elFood].forEach(el => {
+      el.addEventListener('input', applyFilters);
+      el.addEventListener('change', applyFilters);
+    });
+
+    elResetBtn.addEventListener('click', () => {
+      elSearch.value = '';
+      elDistance.value = '';
+      elFood.value = '';
+      elPriceBox.querySelectorAll('.chip.active').forEach(ch => ch.classList.remove('active'));
+      applyFilters(true);
+    });
+
+    elZoomBtn.addEventListener('click', () => fitToVisible());
+
+    function passFilters(row) {
+      // Search: in name or address
+      const q = norm(elSearch.value);
+      if (q) {
+        const hay = norm((row.restaurant_name || '') + ' ' + (row.restaurant_adress || ''));
+        if (!hay.includes(q)) return false;
+      }
+      // Distance
+      const maxMin = parseInt(elDistance.value, 10);
+      if (!isNaN(maxMin)) {
+        const d = parseInt(row.distance_in_min, 10);
+        if (isNaN(d) || d > maxMin) return false;
+      }
+      // Price (chips are OR, but if none selected -> no filter)
+      const prices = getActivePrices();
+      if (prices.length) {
+        if (!prices.includes(String(row.price_range || '').trim())) return false;
+      }
+      // Food type
+      const ft = elFood.value;
+      if (ft && String(row.food_type || '') !== ft) return false;
+
+      return true;
+    }
+
+    function applyFilters(resetSelection = false) {
+      if (resetSelection) clearSelection();
+
+      let anyVisible = false;
+      const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
+
+      all.markers.forEach(({ marker, data }) => {
+        const show = passFilters(data);
+        if (show) {
+          if (!map.hasLayer(marker)) marker.addTo(map);
+          const el = marker.getElement(); if (el) el.classList.remove('dimmed');
+          bounds.extend(marker.getLatLng());
+          anyVisible = true;
+        } else {
+          if (map.hasLayer(marker)) map.removeLayer(marker);
+        }
+      });
+
+      if (!anyVisible) {
+        // keep current view; nothing to fit
+      }
+    }
+
+    function fitToVisible() {
+      const bounds = L.latLngBounds();
+      let added = 0;
+      all.markers.forEach(({ marker }) => {
+        if (map.hasLayer(marker)) { bounds.extend(marker.getLatLng()); added++; }
+      });
+      if (added > 0) map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
+    }
+
+    // ---- Load CSV & plot markers ----
     Papa.parse(csvUrl, {
       download: true,
       header: true,
       skipEmptyLines: true,
       complete: function(results) {
         const data = results.data || [];
-        let placed = 0;
-        const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
+        all.data = data;
 
+        // Populate food types
+        const types = Array.from(new Set(
+          data.map(r => String(r.food_type || '').trim()).filter(Boolean)
+        )).sort((a,b) => a.localeCompare(b));
+        types.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          elFood.appendChild(opt);
+        });
+
+        // Markers
+        const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
         data.forEach(row => {
           const lat = toNum(row.lat);
           const lng = toNum(row.long);
@@ -224,12 +378,11 @@
 
           const marker = L.marker([lat, lng]).addTo(map).bindPopup(simplePopup(row));
           enableHoverPinBehavior(marker, row);
-          markers.push({ marker, data: row });
+          all.markers.push({ marker, data: row });
           bounds.extend([lat, lng]);
-          placed++;
         });
 
-        if (placed > 0) {
+        if (all.markers.length) {
           map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
         } else {
           map.setView([office.lat, office.lng], 15);
@@ -239,6 +392,8 @@
         console.error("Erreur de chargement du CSV:", err);
       }
     });
+
+    // ---- Panel & selection are already defined above ----
   </script>
 </body>
 </html>
