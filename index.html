@@ -3,61 +3,95 @@
 <head>
   <meta charset="utf-8" />
   <title>Carte des Restaurants Digital Value</title>
+
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    body { margin: 0; padding: 0; }
+    html, body { height: 100%; margin: 0; }
     #map { height: 100vh; width: 100%; }
-    .leaflet-popup-content { font-size: 14px; }
+    .leaflet-popup-content { font-size: 14px; line-height: 1.3; }
+    .subtitle { position: absolute; z-index: 1000; left: 10px; top: 10px; background: rgba(255,255,255,.9); padding: 6px 10px; border-radius: 8px; font: 14px/1.2 system-ui, sans-serif; }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div class="subtitle">Carte des restaurants — Digital Value</div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- CSV parser -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
   <script>
-    // 👉 Replace with your Google Sheet ID
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/1FFZ_uEteCyBRF8Iizs4P3ffTBiSerlAEPc6ybAKHSUA/gviz/tq?tqx=out:json&sheet=mymaps_export";
+    // 👉 Replace with your "Publish to the web (CSV)" link of the mymaps_export tab
+    // Example format:
+    // https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/pub?output=csv&single=true&gid=GID_OF_TAB
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRE7LBwALNw3m9kW1XrGh5QnvFuMI2Z4TT8aAI8JA7v4S8WAb8BUVoKzCZSFMwLivFVBjsKjWZUVxPg/pub?gid=1935701035&single=true&output=csv";
 
-    // Init map centered near your office
-    const map = L.map('map').setView([48.8766, 2.3077], 14);
+    // Map centered near your office (fallback if no data)
+    const defaultCenter = [48.8766, 2.3077];
+    const map = L.map('map').setView(defaultCenter, 14);
 
-    // Base layer: OpenStreetMap tiles
+    // Nice background: CARTO Light
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' +
+        '&copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 20
     }).addTo(map);
 
-    // Fetch data from Google Sheets (via Visualization API)
-    fetch(sheetUrl)
-      .then(res => res.text())
-      .then(txt => {
-        // Parse the JSON returned by Google
-        const json = JSON.parse(txt.substr(47).slice(0, -2));
-        const cols = json.table.cols.map(c => c.label);
+    // Helpers
+    const toNum = v => {
+      const n = parseFloat(String(v).replace(',', '.'));
+      return Number.isFinite(n) ? n : null;
+    };
 
-        json.table.rows.forEach(r => {
-          const row = {};
-          r.c.forEach((c, i) => row[cols[i]] = c ? c.v : null);
+    const makePopup = row => {
+      const name = row.restaurant_name || '';
+      const addr = row.restaurant_adress || '';
+      const avg  = row.avg_rating || '-';
+      const cnt  = row.reviews_count || 0;
+      const textReviews = row.reviews_html || ''; // already plain text with \n from your export
+      return `
+        <b>${name}</b><br/>
+        ${addr}<br/>
+        ⭐ ${avg} (${cnt} avis)<br/><br/>
+        <pre style="white-space:pre-wrap; margin:0;">${textReviews}</pre>
+      `;
+    };
 
-          if (row.lat && row.long) {
-            const lat = parseFloat(row.lat);
-            const lng = parseFloat(row.long);
+    // Load CSV & plot markers
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        const data = results.data || [];
+        const bounds = L.latLngBounds();
+        let placed = 0;
 
-            // Build popup
-            const popup = `
-              <b>${row.restaurant_name}</b><br/>
-              ${row.restaurant_adress}<br/>
-              ⭐ ${row.avg_rating || '-'} (${row.reviews_count || 0} avis)<br/>
-              <pre style="white-space:pre-wrap">${row.reviews_html || ''}</pre>
-            `;
+        data.forEach(row => {
+          const lat = toNum(row.lat);
+          const lng = toNum(row.long);
+          if (lat == null || lng == null) return;
 
-            // Add marker
-            L.marker([lat, lng]).addTo(map).bindPopup(popup);
-          }
+          const marker = L.marker([lat, lng]).addTo(map).bindPopup(makePopup(row));
+          bounds.extend([lat, lng]);
+          placed++;
         });
-      })
-      .catch(err => console.error("Erreur chargement sheet:", err));
+
+        if (placed > 0) {
+          // Fit to markers, with a little padding
+          map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
+        } else {
+          // No valid points → keep default center
+          console.warn("Aucun point valide trouvé dans le CSV.");
+        }
+      },
+      error: function(err) {
+        console.error("Erreur de chargement du CSV:", err);
+      }
+    });
   </script>
 </body>
 </html>
