@@ -13,7 +13,7 @@
       --muted: #6b7280;
       --bg: #ffffff;
     }
-    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; overflow-x: hidden; }
     #app { height: 100%; display: grid; grid-template-columns: 1fr; }
     #map { height: 100%; width: 100%; }
     .leaflet-popup-content { font-size: 14px; line-height: 1.35; }
@@ -25,26 +25,26 @@
       box-shadow: 0 2px 10px rgba(0,0,0,.08); font-size: 14px; font-weight: 600;
     }
 
+    /* Left UI column: filters + CTA stacked */
+    #leftUI {
+      position: absolute; z-index: 1001; left: 12px; top: 58px; width: 300px;
+      display: grid; gap: 10px;
+    }
+
     /* Filters box */
     #filters {
-      position: absolute; z-index: 1001; left: 12px; top: 58px;
-      width: 300px; background: var(--bg); border: 1px solid #eee; border-radius: 12px;
+      width: 100%; background: var(--bg); border: 1px solid #eee; border-radius: 12px;
       box-shadow: 0 8px 24px rgba(0,0,0,.08);
       padding: 12px; display: grid; gap: 10px;
     }
     #filters h3 { margin: 0 0 4px; font-size: 14px; }
     #filters .row { display: grid; gap: 6px; }
-    #filters input[type="text"], #filters select {
-      width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;
-      box-sizing: border-box;
+    #filters input[type="text"] {
+      width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box;
     }
     #filters .actions { display: flex; gap: 8px; align-items: center; }
-    #filters button, #filters a.btn {
-      border: 0; background: var(--brand); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer;
-      text-decoration: none; display: inline-block; text-align: center;
-    }
+    #filters button { border: 0; background: var(--brand); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; }
     #filters .reset { background: #f3f4f6; color: #111827; }
-    #filters .cta { display: grid; gap: 8px; margin-top: 4px; }
 
     /* Multi-select dropdowns (Price / Food) */
     .multiselect { position: relative; }
@@ -68,9 +68,7 @@
 
     /* Search with autocomplete + tokens */
     .tokenbox { position: relative; }
-    .tokenlist {
-      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;
-    }
+    .tokenlist { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
     .token {
       background: #e8f0ff; color: #0b57d0; border: 1px solid #c7dcff; border-radius: 999px; padding: 4px 8px; font-size: 12px;
       display: inline-flex; align-items: center; gap: 6px;
@@ -89,14 +87,29 @@
     .sliderwrap { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
     input[type="range"] { width: 100%; }
 
+    /* CTA block (separate) */
+    #cta {
+      width: 100%; background: var(--bg); border: 1px solid #eee; border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      padding: 12px; display: grid; gap: 8px;
+    }
+    #cta a.btn {
+      border: 0; background: var(--brand); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
+      text-decoration: none; display: inline-block; text-align: center;
+    }
+
     /* Side panel (details) */
     #panel {
       position: absolute; right: 0; top: 0; height: 100%; width: var(--panel-width);
       background: #fff; box-shadow: -8px 0 24px rgba(0,0,0,.08);
       transform: translateX(100%); transition: transform .25s ease; z-index: 1100;
       display: flex; flex-direction: column;
+      pointer-events: none; /* NEW: disable interaction when hidden */
     }
-    #panel.active { transform: translateX(0); }
+    #panel.active {
+      transform: translateX(0);
+      pointer-events: auto; /* enable only when active */
+    }
     #panel header {
       padding: 16px 18px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px;
     }
@@ -115,10 +128,8 @@
     .muted { color: var(--muted); }
 
     /* Marker visual states */
-    .dimmed   { filter: grayscale(100%) opacity(0.35); }
-    .highlight{ filter: drop-shadow(0 0 8px var(--brand)) saturate(1.15); transform: scale(1.06); }
-
-    /* Keep zoom control visible (bottom-left) */
+    .dimmed   { opacity: .35; filter: grayscale(100%); }
+    /* Zoom control bottom-left */
     .leaflet-bottom.leaflet-left { margin-left: 12px; margin-bottom: 12px; }
   </style>
 </head>
@@ -128,79 +139,82 @@
 
     <div class="titlechip">Carte des restaurants — Digital Value</div>
 
-    <!-- Filters box -->
-    <div id="filters">
-      <h3>Filtres</h3>
+    <!-- Left column: Filters + CTA -->
+    <div id="leftUI">
+      <!-- Filters -->
+      <div id="filters">
+        <h3>Filtres</h3>
 
-      <!-- Search with autocomplete & tokens -->
-      <div class="row tokenbox">
-        <div id="tok-container" class="tokenlist"></div>
-        <input id="f-search" type="text" placeholder="Rechercher ou sélectionner un resto…" autocomplete="off" />
-        <div id="ac" class="ac-list"></div>
-      </div>
-
-      <!-- Distance slider -->
-      <div class="row sliderrow">
-        <label for="f-distance">Temps depuis le bureau</label>
-        <div class="sliderwrap">
-          <input id="f-distance" type="range" min="0" max="30" step="1" value="30" />
-          <div><span id="f-distance-val">≤ 30</span> min</div>
+        <!-- Search with autocomplete & tokens -->
+        <div class="row tokenbox">
+          <div id="tok-container" class="tokenlist"></div>
+          <input id="f-search" type="text" placeholder="Rechercher ou sélectionner un resto…" autocomplete="off" />
+          <div id="ac" class="ac-list"></div>
         </div>
-      </div>
 
-      <!-- Price multi-select -->
-      <div class="row">
-        <div class="multiselect" id="ms-price">
-          <div class="ms-trigger" data-label="Prix">
-            <span id="ms-price-label">Prix</span>
-            <span class="ms-count" id="ms-price-count"></span>
+        <!-- Distance slider -->
+        <div class="row sliderrow">
+          <label for="f-distance">Temps depuis le bureau</label>
+          <div class="sliderwrap">
+            <input id="f-distance" type="range" min="0" max="30" step="1" value="30" />
+            <div><span id="f-distance-val">≤ 30</span> min</div>
           </div>
-          <div class="ms-panel" id="ms-price-panel">
-            <div class="ms-head">
-              <span>Prix</span>
-              <span>
-                <span class="link" id="price-select-all">Tout</span> ·
-                <span class="link" id="price-select-none">Aucun</span>
-              </span>
+        </div>
+
+        <!-- Price multi-select -->
+        <div class="row">
+          <div class="multiselect" id="ms-price">
+            <div class="ms-trigger" data-label="Prix 💶">
+              <span id="ms-price-label">Prix 💶</span>
+              <span class="ms-count" id="ms-price-count"></span>
             </div>
-            <!-- options injected -->
-          </div>
-        </div>
-      </div>
-
-      <!-- Food type multi-select -->
-      <div class="row">
-        <div class="multiselect" id="ms-food">
-          <div class="ms-trigger" data-label="Type de cuisine">
-            <span id="ms-food-label">Type de cuisine</span>
-            <span class="ms-count" id="ms-food-count"></span>
-          </div>
-          <div class="ms-panel" id="ms-food-panel">
-            <div class="ms-head">
-              <span>Type de cuisine</span>
-              <span>
-                <span class="link" id="food-select-all">Tout</span> ·
-                <span class="link" id="food-select-none">Aucun</span>
-              </span>
+            <div class="ms-panel" id="ms-price-panel">
+              <div class="ms-head">
+                <span>Prix 💶</span>
+                <span>
+                  <span class="link" id="price-select-all">Tout</span> ·
+                  <span class="link" id="price-select-none">Aucun</span>
+                </span>
+              </div>
+              <!-- options injected -->
             </div>
-            <!-- options injected -->
           </div>
+        </div>
+
+        <!-- Food type multi-select -->
+        <div class="row">
+          <div class="multiselect" id="ms-food">
+            <div class="ms-trigger" data-label="Type de restaurant 🍽️">
+              <span id="ms-food-label">Type de restaurant 🍽️</span>
+              <span class="ms-count" id="ms-food-count"></span>
+            </div>
+            <div class="ms-panel" id="ms-food-panel">
+              <div class="ms-head">
+                <span>Type de restaurant 🍽️</span>
+                <span>
+                  <span class="link" id="food-select-all">Tout</span> ·
+                  <span class="link" id="food-select-none">Aucun</span>
+                </span>
+              </div>
+              <!-- options injected -->
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="f-zoom">Zoom sur les résultats</button>
+          <button id="f-reset" class="reset">Réinitialiser</button>
         </div>
       </div>
 
-      <div class="actions">
-        <button id="f-zoom">Zoom sur les résultats</button>
-        <button id="f-reset" class="reset">Réinitialiser</button>
-      </div>
-
-      <!-- CTAs to Forms -->
-      <div class="cta">
+      <!-- CTA block (separate) -->
+      <div id="cta">
         <a class="btn" target="_blank" rel="noopener"
            href="https://docs.google.com/forms/d/e/1FAIpQLScCMY-av6uPlNI6kqnJZi4hRwDdkeaNYb5-VruNraSp42rg0Q/viewform?usp=dialog">
           ➕ Ajouter un restaurant
         </a>
         <a class="btn" target="_blank" rel="noopener"
-           href="https://docs.google.com/forms/d/e/1FAIpQLScCMY-av6uPlNI6kqnJZi4hRwDdkeaNYb5-VruNraSp42rg0Q/viewform?usp=dialog">
+           href="https://docs.google.com/forms/d/e/1FAIpQLSejL1sTKs7s9bwkUFkZKJCydxm9GNVkhaaxNB6CZo3Cu_kb1Q/viewform?usp=dialog">
           ✍️ Laisser un avis
         </a>
       </div>
@@ -243,13 +257,13 @@
       maxZoom: 20
     }).addTo(map);
 
-    // Office marker
+    // Office marker (red, solid)
     const officeMarker = L.circleMarker([office.lat, office.lng], {
       radius: 8, color: '#d33', fillColor: '#d33', fillOpacity: 1, weight: 2
     }).addTo(map).bindPopup(`<b>${office.name}</b>`);
 
     // State
-    const all = { data: [], markers: [] }; // { marker, data, key }
+    const all = { data: [], markers: [] }; // { marker, data, key, defaultStyle }
     let selectedMarker = null;
 
     // Helpers
@@ -302,34 +316,34 @@
 
     function clearSelection() {
       selectedMarker = null;
-      all.markers.forEach(m => m.marker.getElement()?.classList.remove('highlight'));
+      // Restore all circle markers to default style and remove any highlight
+      all.markers.forEach(m => m.marker.setStyle(m.defaultStyle));
       document.getElementById('panel').classList.remove('active');
       map.closePopup();
     }
 
     document.getElementById('p-close').addEventListener('click', clearSelection);
     map.on('click', (e) => {
-      if (!e.originalEvent.target.closest('.leaflet-marker-icon') &&
-          !e.originalEvent.target.closest('.leaflet-popup')) {
+      if (!e.originalEvent.target.closest('.leaflet-interactive') && !e.originalEvent.target.closest('.leaflet-popup')) {
         clearSelection();
       }
     });
 
-    function enableHoverPinBehavior(marker, row = null) {
+    function enableHoverPinBehavior(marker, row = null, defaultStyle, highlightStyle) {
       marker._pinned = false;
 
       marker.on('mouseover', function () { if (!this._pinned) this.openPopup(); });
       marker.on('mouseout',  function () { if (!this._pinned) this.closePopup(); });
       marker.on('click', function (ev) {
-        const el = this.getElement();
         const nowPinned = !this._pinned;
 
-        all.markers.forEach(m => { m.marker._pinned = false; m.marker.getElement()?.classList.remove('highlight'); });
+        // Unpin all and reset styles
+        all.markers.forEach(m => { m.marker._pinned = false; m.marker.setStyle(m.defaultStyle); });
 
         if (nowPinned) {
           this._pinned = true;
           this.openPopup();
-          el?.classList.add('highlight');
+          this.setStyle(highlightStyle); // highlight only clicked
           if (row) updatePanel(row);
           selectedMarker = this;
         } else {
@@ -401,7 +415,7 @@
     }
 
     function updateMSCount(countEl, selectedSet, values) {
-      if (selectedSet.size === 0) countEl.textContent = ''; // no filter
+      if (selectedSet.size === 0) countEl.textContent = '';
       else if (selectedSet.size === values.length) countEl.textContent = '(tous)';
       else countEl.textContent = `(${selectedSet.size})`;
     }
@@ -451,28 +465,6 @@
       applyFilters(true);
     });
 
-    // Select all/none handlers
-    priceSelectAll.addEventListener('click', () => {
-      priceValues.forEach(v => selectedPrices.add(v));
-      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
-      applyFilters(true);
-    });
-    priceSelectNone.addEventListener('click', () => {
-      selectedPrices.clear();
-      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
-      applyFilters(true);
-    });
-    foodSelectAll.addEventListener('click', () => {
-      foodValues.forEach(v => selectedFoods.add(v));
-      renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
-      applyFilters(true);
-    });
-    foodSelectNone.addEventListener('click', () => {
-      selectedFoods.clear();
-      renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
-      applyFilters(true);
-    });
-
     // Reset & Zoom
     elResetBtn.addEventListener('click', () => {
       // Clear filters
@@ -501,11 +493,11 @@
         }
       }
 
-      // Distance (rows without distance are treated as not matching unless slider is 30)
+      // Distance (rows without distance included only when slider at 30)
       const maxMin = parseInt(elRange.value, 10); // 0..30
       const d = parseInt(row.distance_in_min, 10);
       if (isNaN(d)) {
-        if (maxMin < 30) return false; // include unknown distance only when slider at max
+        if (maxMin < 30) return false;
       } else if (d > maxMin) {
         return false;
       }
@@ -556,7 +548,7 @@
         const data = results.data || [];
         all.data = data;
 
-        // Gather unique values from data
+        // Gather unique values
         priceValues = Array.from(new Set(
           data.map(r => String(r.price_range || '').trim()).filter(Boolean)
         )).sort((a,b) => a.length - b.length || a.localeCompare(b));
@@ -568,16 +560,19 @@
         renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
         renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
 
-        // Create markers
+        // Create PLAIN markers (solid color circles)
         const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
         data.forEach(row => {
           const lat = toNum(row.lat);
           const lng = toNum(row.long);
           if (lat == null || lng == null) return;
 
-          const marker = L.marker([lat, lng]).addTo(map).bindPopup(simplePopup(row));
-          enableHoverPinBehavior(marker, row);
-          all.markers.push({ marker, data: row, key: keyOf(row) });
+          const defaultStyle = { radius: 7, color: '#0b57d0', weight: 2, fillColor: '#0b57d0', fillOpacity: 1 };
+          const highlightStyle= { radius: 9, color: '#0b57d0', weight: 3, fillColor: '#0b57d0', fillOpacity: 1 };
+
+          const marker = L.circleMarker([lat, lng], defaultStyle).addTo(map).bindPopup(simplePopup(row));
+          enableHoverPinBehavior(marker, row, defaultStyle, highlightStyle);
+          all.markers.push({ marker, data: row, key: keyOf(row), defaultStyle });
           bounds.extend([lat, lng]);
         });
 
@@ -594,6 +589,28 @@
       error: function(err) {
         console.error("Erreur de chargement du CSV:", err);
       }
+    });
+
+    // ----- Select all / none clicks after options are rendered -----
+    document.getElementById('price-select-all').addEventListener('click', () => {
+      priceValues.forEach(v => selectedPrices.add(v));
+      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
+      applyFilters(true);
+    });
+    document.getElementById('price-select-none').addEventListener('click', () => {
+      selectedPrices.clear();
+      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
+      applyFilters(true);
+    });
+    document.getElementById('food-select-all').addEventListener('click', () => {
+      foodValues.forEach(v => selectedFoods.add(v));
+      renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
+      applyFilters(true);
+    });
+    document.getElementById('food-select-none').addEventListener('click', () => {
+      selectedFoods.clear();
+      renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
+      applyFilters(true);
     });
   </script>
 </body>
