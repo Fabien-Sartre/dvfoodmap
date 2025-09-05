@@ -10,8 +10,11 @@
     :root {
       --panel-width: 380px;
       --brand: #205867;
+      --brand-strong: #18434d;
       --muted: #6b7280;
       --bg: #ffffff;
+      --star-gold: #F59E0B;
+      --star-grey: #D1D5DB;
     }
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; overflow-x: hidden; }
     #app { height: 100%; display: grid; grid-template-columns: 1fr; }
@@ -42,9 +45,13 @@
     #filters input[type="text"] {
       width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box;
     }
-    #filters .actions { display: flex; gap: 8px; align-items: center; }
-    #filters button { border: 0; background: var(--brand); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; }
-    #filters .reset { background: #f3f4f6; color: #111827; }
+    #filters .actions { display: flex; gap: 8px; align-items: stretch; }
+    #filters .actions button {
+      border: 0; background: var(--brand); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; flex: 1;
+    }
+    #filters .actions button:hover { background: var(--brand-strong); }
+    #filters .actions .reset { background: #f3f4f6; color: #111827; }
+    #filters .actions .reset:hover { background: #e5e7eb; }
 
     /* Multi-select dropdowns (Price / Food) */
     .multiselect { position: relative; }
@@ -70,7 +77,7 @@
     .tokenbox { position: relative; }
     .tokenlist { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
     .token {
-      background: #e8f0ff; color: #205867; border: 1px solid #c7dcff; border-radius: 999px; padding: 4px 8px; font-size: 12px;
+      background: #e8f0ff; color: var(--brand); border: 1px solid #c7dcff; border-radius: 999px; padding: 4px 8px; font-size: 12px;
       display: inline-flex; align-items: center; gap: 6px;
     }
     .token .x { cursor: pointer; }
@@ -82,10 +89,30 @@
     .ac-item { padding: 8px 10px; cursor: pointer; }
     .ac-item:hover { background: #f3f4f6; }
 
-    /* Distance slider */
+    /* Distance slider (brand themed) */
     .sliderrow { display: grid; gap: 6px; }
     .sliderwrap { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-    input[type="range"] { width: 100%; }
+    input[type="range"] { width: 100%; height: 6px; background: transparent; }
+    input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: #e5e7eb; border-radius: 999px; }
+    input[type="range"]::-moz-range-track { height: 6px; background: #e5e7eb; border-radius: 999px; }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--brand); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--brand);
+      margin-top: -6px;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--brand); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--brand);
+    }
+    /* filled portion (Firefox) */
+    input[type="range"]::-moz-range-progress { background-color: var(--brand); height: 6px; border-radius: 999px; }
+    /* filled portion (WebKit) via gradient trick */
+    input[type="range"] {
+      background: linear-gradient(var(--brand), var(--brand)) no-repeat #e5e7eb;
+      background-size: 0% 100%;
+      border-radius: 999px;
+    }
 
     /* CTA block (separate) */
     #cta {
@@ -97,6 +124,7 @@
       border: 0; background: var(--brand); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
       text-decoration: none; display: inline-block; text-align: center;
     }
+    #cta a.btn:hover { background: var(--brand-strong); }
 
     /* Side panel (details) */
     #panel {
@@ -120,7 +148,7 @@
     }
     #panel .body { padding: 14px 18px; overflow-y: auto; }
     .meta { color: var(--muted); font-size: 13px; display: grid; gap: 4px; margin: 6px 0 12px; }
-    .pill { display: inline-block; background: #f3f4f6; color: #205867; font-size: 12px; padding: 4px 8px; border-radius: 999px; margin-right: 6px; }
+    .pill { display: inline-block; background: #f3f4f6; color: var(--brand); font-size: 12px; padding: 4px 8px; border-radius: 999px; margin-right: 6px; }
     .section-title { font-weight: 600; margin: 14px 0 8px; }
     .reviews { max-height: 50vh; overflow-y: auto; border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fafafa; }
     .review { padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
@@ -266,7 +294,7 @@
     // ====== Inline SVG icons ======
     const restaurantSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
-  <path fill="#0b57d0" d="M128 252.6C128 148.4 214 64 320 64C426 64 512 148.4 512 252.6C512 371.9 391.8 514.9 341.6 569.4C329.8 582.2 310.1 582.2 298.3 569.4C248.1 514.9 127.9 371.9 127.9 252.6zM320 320C355.3 320 384 291.3 384 256C384 220.7 355.3 192 320 192C284.7 192 256 220.7 256 256C256 291.3 284.7 320 320 320z"/>
+  <path fill="#205867" d="M128 252.6C128 148.4 214 64 320 64C426 64 512 148.4 512 252.6C512 371.9 391.8 514.9 341.6 569.4C329.8 582.2 310.1 582.2 298.3 569.4C248.1 514.9 127.9 371.9 127.9 252.6zM320 320C355.3 320 384 291.3 384 256C384 220.7 355.3 192 320 192C284.7 192 256 220.7 256 256C256 291.3 284.7 320 320 320z"/>
 </svg>`;
 
     const officeSvg = `
@@ -306,17 +334,32 @@
     const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
     const keyOf = r => `${(r.restaurant_name||'').trim()} — ${(r.restaurant_adress||'').trim()}`;
 
+    function avgStarsHtml(avg) {
+      const n = Number(avg);
+      if (!Number.isFinite(n)) return '—';
+      const k = Math.max(0, Math.min(5, Math.round(n)));
+      const filled = `<span style="color:var(--star-gold)">★</span>`.repeat(k);
+      const empty  = `<span style="color:var(--star-grey)">★</span>`.repeat(5 - k);
+      const num    = `<span class="muted">(${n.toFixed(1)}/5)</span>`;
+      return filled + empty + ' ' + num;
+    }
+
     function simplePopup(row) {
       const name = row.restaurant_name || '';
       const addr = row.restaurant_adress || '';
-      const avg  = row.avg_rating || '-';
+      const avg  = row.avg_rating;
       const cnt  = row.reviews_count || 0;
       const dist = row.distance_in_min ? `${row.distance_in_min} min` : '';
+
+      const rating = Number.isFinite(Number(avg))
+        ? `${avgStarsHtml(avg)} <span class="muted">· ${cnt} avis</span>`
+        : `<span class="muted">${cnt} avis</span>`;
+
       return `
         <div style="min-width:220px">
           <b>${name}</b><br/>
           ${addr}<br/>
-          ⭐ ${avg} (${cnt} avis) ${dist ? ' · 🕒 ' + dist : ''}
+          ${rating}${dist ? ' · 🕒 ' + dist : ''}
         </div>`;
     }
 
@@ -332,7 +375,9 @@
       document.getElementById('p-title').innerText = row.restaurant_name || '';
       const meta = [];
       if (row.restaurant_adress) meta.push(row.restaurant_adress);
-      const ratingText = `⭐ ${row.avg_rating || '-'} (${row.reviews_count || 0} avis)`;
+      const ratingText = Number.isFinite(Number(row.avg_rating))
+        ? `${avgStarsHtml(row.avg_rating)} · ${row.reviews_count || 0} avis`
+        : `${row.reviews_count || 0} avis`;
       meta.push(ratingText);
       if (row.distance_in_min) meta.push(`🕒 ${row.distance_in_min} min depuis le bureau`);
       document.getElementById('p-meta').innerHTML = meta.map(m => `<div>${m}</div>`).join('');
@@ -348,7 +393,6 @@
 
     function clearSelection() {
       selectedMarker = null;
-      // remove highlight class from all marker <img> elements
       all.markers.forEach(m => m.marker.getElement()?.classList.remove('highlight'));
       document.getElementById('panel').classList.remove('active');
       map.closePopup();
@@ -377,7 +421,7 @@
         if (nowPinned) {
           this._pinned = true;
           this.openPopup();
-          this.getElement()?.classList.add('highlight'); // CSS-driven highlight
+          this.getElement()?.classList.add('highlight');
           if (row) updatePanel(row);
           selectedMarker = this;
         } else {
@@ -414,7 +458,7 @@
     // Multi-select state
     const selectedPrices = new Set();
     const selectedFoods  = new Set();
-    const selectedKeys   = new Set(); // restaurant tokens
+    const selectedKeys   = new Set();
 
     function toggleMS(container, open) {
       if (open === undefined) container.classList.toggle('open');
@@ -429,9 +473,7 @@
     });
 
     function renderMS(panel, values, selectedSet, countEl) {
-      // Remove old options (keep header)
       panel.querySelectorAll('.ms-opt').forEach(n => n.remove());
-
       values.forEach(v => {
         const id = `${panel.id}-${v}`;
         const row = document.createElement('label');
@@ -444,7 +486,6 @@
           applyFilters(true);
         });
       });
-
       updateMSCount(countEl, selectedSet, values);
     }
 
@@ -454,10 +495,14 @@
       else countEl.textContent = `(${selectedSet.size})`;
     }
 
-    // Distance slider
+    // Distance slider label + fill background for WebKit
     function updateSliderLabel() {
       const v = parseInt(elRange.value,10);
       elRangeVal.textContent = '≤ ' + v;
+
+      // update WebKit background-size to show filled portion
+      const pct = (v / parseInt(elRange.max,10)) * 100;
+      elRange.style.backgroundSize = pct + '% 100%';
     }
     elRange.addEventListener('input', () => { updateSliderLabel(); applyFilters(false); });
 
@@ -501,25 +546,21 @@
 
     // Reset & Zoom
     elResetBtn.addEventListener('click', () => {
-      // Clear filters
       elSearch.value = ''; elAC.style.display='none'; selectedKeys.clear(); renderTokens();
       elRange.value = 30; updateSliderLabel();
       selectedPrices.clear(); selectedFoods.clear();
       renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
       renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
-      // Apply + reset selection and zoom
       applyFilters(true);
       map.setView([office.lat, office.lng], defaultZoom);
     });
     elZoomBtn.addEventListener('click', () => fitToFiltered());
 
-    // ---------- Filtering logic (GREY OUT via CSS classes) ----------
+    // ---------- Filtering logic ----------
     function passFilters(row) {
-      // If specific restaurants selected (tokens), only those match
       if (selectedKeys.size) {
         if (!selectedKeys.has(keyOf(row))) return false;
       } else {
-        // Text query (when no tokens)
         const q = norm(elSearch.value);
         if (q) {
           const hay = norm((row.restaurant_name||'') + ' ' + (row.restaurant_adress||''));
@@ -527,7 +568,6 @@
         }
       }
 
-      // Distance (rows without distance included only when slider at 30)
       const maxMin = parseInt(elRange.value, 10); // 0..30
       const d = parseInt(row.distance_in_min, 10);
       if (isNaN(d)) {
@@ -536,25 +576,18 @@
         return false;
       }
 
-      // Price multi-select
       if (selectedPrices.size && !selectedPrices.has(String(row.price_range || '').trim())) return false;
-      // Food multi-select
-      if (selectedFoods.size && !selectedFoods.has(String(row.food_type || '').trim())) return false;
+      if (selectedFoods.size  && !selectedFoods.has(String(row.food_type   || '').trim())) return false;
 
       return true;
     }
 
     function applyFilters(resetSelection = false) {
       if (resetSelection) clearSelection();
-
       all.markers.forEach(({ marker, data }) => {
         const el = marker.getElement();
         if (!el) return;
-        if (passFilters(data)) {
-          el.classList.remove('dimmed');
-        } else {
-          el.classList.add('dimmed');
-        }
+        if (passFilters(data)) el.classList.remove('dimmed'); else el.classList.add('dimmed');
       });
     }
 
@@ -582,7 +615,6 @@
         const data = results.data || [];
         all.data = data;
 
-        // Gather unique values
         priceValues = Array.from(new Set(
           data.map(r => String(r.price_range || '').trim()).filter(Boolean)
         )).sort((a,b) => a.length - b.length || a.localeCompare(b));
@@ -590,11 +622,9 @@
           data.map(r => String(r.food_type || '').trim()).filter(Boolean)
         )).sort((a,b) => a.localeCompare(b));
 
-        // Render multi-select panels
         renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
         renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
 
-        // Create markers using custom pin icon
         const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
         data.forEach(row => {
           const lat = toNum(row.lat);
