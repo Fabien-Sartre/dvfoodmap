@@ -45,9 +45,16 @@
     #filters input[type="text"] {
       width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box;
     }
-    #filters .actions { display: flex; gap: 8px; align-items: stretch; }
+
+    /* Actions row: two buttons that fill the full width */
+    #filters .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      align-items: stretch;
+    }
     #filters .actions button {
-      border: 0; background: var(--brand); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; flex: 1;
+      border: 0; background: var(--brand); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
     }
     #filters .actions button:hover { background: var(--brand-strong); }
     #filters .actions .reset { background: #f3f4f6; color: #111827; }
@@ -89,12 +96,17 @@
     .ac-item { padding: 8px 10px; cursor: pointer; }
     .ac-item:hover { background: #f3f4f6; }
 
-    /* Distance slider (brand themed) */
+    /* Sliders (brand themed) */
     .sliderrow { display: grid; gap: 6px; }
     .sliderwrap { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-    input[type="range"] { width: 100%; height: 6px; background: transparent; }
-    input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: #e5e7eb; border-radius: 999px; }
+    input[type="range"] {
+      width: 100%; height: 6px; background: linear-gradient(var(--brand), var(--brand)) no-repeat #e5e7eb;
+      background-size: 0% 100%; border-radius: 999px; outline: none;
+    }
+    /* Track */
+    input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; border-radius: 999px; }
     input[type="range"]::-moz-range-track { height: 6px; background: #e5e7eb; border-radius: 999px; }
+    /* Thumb */
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none;
       width: 18px; height: 18px; border-radius: 50%;
@@ -105,14 +117,8 @@
       width: 18px; height: 18px; border-radius: 50%;
       background: var(--brand); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--brand);
     }
-    /* filled portion (Firefox) */
+    /* Filled portion (Firefox) */
     input[type="range"]::-moz-range-progress { background-color: var(--brand); height: 6px; border-radius: 999px; }
-    /* filled portion (WebKit) via gradient trick */
-    input[type="range"] {
-      background: linear-gradient(var(--brand), var(--brand)) no-repeat #e5e7eb;
-      background-size: 0% 100%;
-      border-radius: 999px;
-    }
 
     /* CTA block (separate) */
     #cta {
@@ -184,6 +190,15 @@
           <div id="tok-container" class="tokenlist"></div>
           <input id="f-search" type="text" placeholder="Rechercher ou sélectionner un resto…" autocomplete="off" />
           <div id="ac" class="ac-list"></div>
+        </div>
+
+        <!-- Minimum rating slider -->
+        <div class="row sliderrow">
+          <label for="f-rating">Note minimale</label>
+          <div class="sliderwrap">
+            <input id="f-rating" type="range" min="0" max="5" step="0.5" value="0" />
+            <div><span id="f-rating-val">≥ 0</span> ★</div>
+          </div>
         </div>
 
         <!-- Distance slider -->
@@ -435,6 +450,10 @@
     const elSearch   = document.getElementById('f-search');
     const elTokBox   = document.getElementById('tok-container');
     const elAC       = document.getElementById('ac');
+
+    const elRating    = document.getElementById('f-rating');
+    const elRatingVal = document.getElementById('f-rating-val');
+
     const elRange    = document.getElementById('f-distance');
     const elRangeVal = document.getElementById('f-distance-val');
 
@@ -458,7 +477,7 @@
     // Multi-select state
     const selectedPrices = new Set();
     const selectedFoods  = new Set();
-    const selectedKeys   = new Set();
+    const selectedKeys   = new Set(); // restaurant tokens
 
     function toggleMS(container, open) {
       if (open === undefined) container.classList.toggle('open');
@@ -473,7 +492,9 @@
     });
 
     function renderMS(panel, values, selectedSet, countEl) {
+      // Remove old options (keep header)
       panel.querySelectorAll('.ms-opt').forEach(n => n.remove());
+
       values.forEach(v => {
         const id = `${panel.id}-${v}`;
         const row = document.createElement('label');
@@ -486,6 +507,7 @@
           applyFilters(true);
         });
       });
+
       updateMSCount(countEl, selectedSet, values);
     }
 
@@ -495,16 +517,30 @@
       else countEl.textContent = `(${selectedSet.size})`;
     }
 
-    // Distance slider label + fill background for WebKit
-    function updateSliderLabel() {
+    // Generic range fill updater (WebKit) to color the left side of the thumb
+    function setRangeFill(rangeEl) {
+      const min = parseFloat(rangeEl.min || 0);
+      const max = parseFloat(rangeEl.max || 1);
+      const val = parseFloat(rangeEl.value || 0);
+      const pct = ((val - min) / (max - min)) * 100;
+      rangeEl.style.backgroundSize = pct + '% 100%';
+    }
+
+    // Rating slider
+    function updateRatingLabel() {
+      const v = parseFloat(elRating.value);
+      elRatingVal.textContent = '≥ ' + (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1));
+      setRangeFill(elRating);
+    }
+    elRating.addEventListener('input', () => { updateRatingLabel(); applyFilters(false); });
+
+    // Distance slider
+    function updateDistanceLabel() {
       const v = parseInt(elRange.value,10);
       elRangeVal.textContent = '≤ ' + v;
-
-      // update WebKit background-size to show filled portion
-      const pct = (v / parseInt(elRange.max,10)) * 100;
-      elRange.style.backgroundSize = pct + '% 100%';
+      setRangeFill(elRange);
     }
-    elRange.addEventListener('input', () => { updateSliderLabel(); applyFilters(false); });
+    elRange.addEventListener('input', () => { updateDistanceLabel(); applyFilters(false); });
 
     // Tokens (selected restaurants)
     function renderTokens() {
@@ -546,11 +582,14 @@
 
     // Reset & Zoom
     elResetBtn.addEventListener('click', () => {
+      // Clear filters
       elSearch.value = ''; elAC.style.display='none'; selectedKeys.clear(); renderTokens();
-      elRange.value = 30; updateSliderLabel();
+      elRating.value = 0;  updateRatingLabel();
+      elRange.value  = 30; updateDistanceLabel();
       selectedPrices.clear(); selectedFoods.clear();
       renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
       renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
+      // Apply + reset selection and zoom
       applyFilters(true);
       map.setView([office.lat, office.lng], defaultZoom);
     });
@@ -558,6 +597,7 @@
 
     // ---------- Filtering logic ----------
     function passFilters(row) {
+      // Token selection vs free text
       if (selectedKeys.size) {
         if (!selectedKeys.has(keyOf(row))) return false;
       } else {
@@ -568,6 +608,14 @@
         }
       }
 
+      // Min rating
+      const minRating = parseFloat(elRating.value);
+      const avg = Number(row.avg_rating);
+      if (minRating > 0) {
+        if (!Number.isFinite(avg) || avg < minRating) return false;
+      }
+
+      // Distance (rows without distance included only when slider at max)
       const maxMin = parseInt(elRange.value, 10); // 0..30
       const d = parseInt(row.distance_in_min, 10);
       if (isNaN(d)) {
@@ -576,7 +624,9 @@
         return false;
       }
 
+      // Price multi-select
       if (selectedPrices.size && !selectedPrices.has(String(row.price_range || '').trim())) return false;
+      // Food multi-select
       if (selectedFoods.size  && !selectedFoods.has(String(row.food_type   || '').trim())) return false;
 
       return true;
@@ -615,6 +665,7 @@
         const data = results.data || [];
         all.data = data;
 
+        // Unique filter values
         priceValues = Array.from(new Set(
           data.map(r => String(r.price_range || '').trim()).filter(Boolean)
         )).sort((a,b) => a.length - b.length || a.localeCompare(b));
@@ -622,9 +673,11 @@
           data.map(r => String(r.food_type || '').trim()).filter(Boolean)
         )).sort((a,b) => a.localeCompare(b));
 
+        // Render multi-select panels
         renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
         renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
 
+        // Create markers using custom pin icon
         const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
         data.forEach(row => {
           const lat = toNum(row.lat);
@@ -647,7 +700,8 @@
         }
 
         // Initial state
-        updateSliderLabel();
+        updateRatingLabel();
+        updateDistanceLabel();
         applyFilters(false);
       },
       error: function(err) {
