@@ -1,1 +1,62 @@
-<h1>TEST</h1>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Carte des Restaurants Digital Value</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100%; }
+    .leaflet-popup-content { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // 👉 Replace with your Google Sheet ID
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/1FFZ_uEteCyBRF8Iizs4P3ffTBiSerlAEPc6ybAKHSUA/gviz/tq?tqx=out:json&sheet=mymaps_export";
+
+    // Init map centered near your office
+    const map = L.map('map').setView([48.8766, 2.3077], 14);
+
+    // Base layer: OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Fetch data from Google Sheets (via Visualization API)
+    fetch(sheetUrl)
+      .then(res => res.text())
+      .then(txt => {
+        // Parse the JSON returned by Google
+        const json = JSON.parse(txt.substr(47).slice(0, -2));
+        const cols = json.table.cols.map(c => c.label);
+
+        json.table.rows.forEach(r => {
+          const row = {};
+          r.c.forEach((c, i) => row[cols[i]] = c ? c.v : null);
+
+          if (row.lat && row.long) {
+            const lat = parseFloat(row.lat);
+            const lng = parseFloat(row.long);
+
+            // Build popup
+            const popup = `
+              <b>${row.restaurant_name}</b><br/>
+              ${row.restaurant_adress}<br/>
+              ⭐ ${row.avg_rating || '-'} (${row.reviews_count || 0} avis)<br/>
+              <pre style="white-space:pre-wrap">${row.reviews_html || ''}</pre>
+            `;
+
+            // Add marker
+            L.marker([lat, lng]).addTo(map).bindPopup(popup);
+          }
+        });
+      })
+      .catch(err => console.error("Erreur chargement sheet:", err));
+  </script>
+</body>
+</html>
