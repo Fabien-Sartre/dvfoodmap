@@ -258,7 +258,7 @@
     }).addTo(map);
 
     // Office marker (red, solid)
-    const officeMarker = L.Marker([office.lat, office.lng], {
+    const officeMarker = L.marker([office.lat, office.lng], {
       radius: 8, color: '#d33', fillColor: '#d33', fillOpacity: 1, weight: 2
     }).addTo(map).bindPopup(`<b>${office.name}</b>`);
 
@@ -317,7 +317,7 @@
     function clearSelection() {
       selectedMarker = null;
       // Restore all circle markers to default style and remove any highlight
-      all.markers.forEach(m => m.marker.setStyle(m.defaultStyle));
+      alL.markers.forEach(m => m.marker.setStyle(m.defaultStyle));
       document.getElementById('panel').classList.remove('active');
       map.closePopup();
     }
@@ -338,7 +338,7 @@
         const nowPinned = !this._pinned;
 
         // Unpin all and reset styles
-        all.markers.forEach(m => { m.marker._pinned = false; m.marker.setStyle(m.defaultStyle); });
+        alL.markers.forEach(m => { m.marker._pinned = false; m.marker.setStyle(m.defaultStyle); });
 
         if (nowPinned) {
           this._pinned = true;
@@ -513,7 +513,7 @@
     function applyFilters(resetSelection = false) {
       if (resetSelection) clearSelection();
 
-      all.markers.forEach(({ marker, data }) => {
+      alL.markers.forEach(({ marker, data }) => {
         const el = marker.getElement();
         if (!el) return;
         if (passFilters(data)) {
@@ -527,7 +527,7 @@
     function fitToFiltered() {
       const bounds = L.latLngBounds();
       let added = 0;
-      all.markers.forEach(({ marker }) => {
+      alL.markers.forEach(({ marker }) => {
         const el = marker.getElement();
         if (el && !el.classList.contains('dimmed')) {
           bounds.extend(marker.getLatLng());
@@ -570,13 +570,13 @@
           const defaultStyle = { radius: 7, color: '#0b57d0', weight: 2, fillColor: '#0b57d0', fillOpacity: 1 };
           const highlightStyle= { radius: 9, color: '#0b57d0', weight: 3, fillColor: '#0b57d0', fillOpacity: 1 };
 
-          const marker = L.Marker([lat, lng], defaultStyle).addTo(map).bindPopup(simplePopup(row));
+          const marker = L.marker([lat, lng], defaultStyle).addTo(map).bindPopup(simplePopup(row));
           enableHoverPinBehavior(marker, row, defaultStyle, highlightStyle);
-          all.markers.push({ marker, data: row, key: keyOf(row), defaultStyle });
+          alL.markers.push({ marker, data: row, key: keyOf(row), defaultStyle });
           bounds.extend([lat, lng]);
         });
 
-        if (all.markers.length) {
+        if (alL.markers.length) {
           map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
         } else {
           map.setView([office.lat, office.lng], defaultZoom);
