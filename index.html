@@ -1,21 +1,74 @@
+//
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>DV Food Map 🥗​🥙​🍱​🍔​🍕 </title>
+  <title>DV Food map 🥗​🥙​🍱​🍔​🍕​</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100vh; width: 100%; }
-    .leaflet-popup-content { font-size: 14px; line-height: 1.3; }
-    .subtitle { position: absolute; z-index: 1000; left: 10px; top: 10px; background: rgba(255,255,255,.9); padding: 6px 10px; border-radius: 8px; font: 14px/1.2 system-ui, sans-serif; }
+    :root {
+      --panel-width: 380px;
+      --brand: #0f6fff;
+      --muted: #6b7280;
+    }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #app { height: 100%; display: grid; grid-template-columns: 1fr; }
+    #map { height: 100%; width: 100%; }
+    .leaflet-popup-content { font-size: 14px; line-height: 1.35; }
+    .subtitle {
+      position: absolute; z-index: 1000; left: 12px; top: 12px;
+      background: rgba(255,255,255,.95); padding: 8px 12px; border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.08); font-size: 14px;
+    }
+    /* Side panel */
+    #panel {
+      position: absolute; right: 0; top: 0; height: 100%; width: var(--panel-width);
+      background: #fff; box-shadow: -8px 0 24px rgba(0,0,0,.08);
+      transform: translateX(100%); transition: transform .25s ease; z-index: 1100;
+      display: flex; flex-direction: column;
+    }
+    #panel.active { transform: translateX(0); }
+    #panel header {
+      padding: 16px 18px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px;
+    }
+    #panel header h2 { margin: 0; font-size: 18px; line-height: 1.2; }
+    #panel header .close {
+      margin-left: auto; border: 0; background: #f3f4f6; width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+      font-size: 18px;
+    }
+    #panel .body { padding: 14px 18px; overflow-y: auto; }
+    .meta { color: var(--muted); font-size: 13px; display: grid; gap: 4px; margin: 6px 0 12px; }
+    .pill { display: inline-block; background: #f3f4f6; color: #111827; font-size: 12px; padding: 4px 8px; border-radius: 999px; margin-right: 6px; }
+    .section-title { font-weight: 600; margin: 14px 0 8px; }
+    .reviews { max-height: 50vh; overflow-y: auto; border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fafafa; }
+    .review { padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
+    .review:last-child { border-bottom: 0; }
+    .muted { color: var(--muted); }
+    /* Dim non-selected markers */
+    .dimmed { filter: grayscale(100%) opacity(0.35); }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div class="subtitle">DV Food Map 🥗​🥙​🍱​🍔​🍕 </div>
+  <div id="app">
+    <div id="map"></div>
+    <div class="subtitle">DV Food map 🥗​🥙​🍱​🍔​🍕​</div>
+
+    <!-- Side panel -->
+    <aside id="panel">
+      <header>
+        <h2 id="p-title">Détails</h2>
+        <button class="close" id="p-close" title="Fermer">×</button>
+      </header>
+      <div class="body">
+        <div id="p-meta" class="meta"></div>
+        <div id="p-pills"></div>
+        <div class="section-title">Avis récents</div>
+        <div id="p-reviews" class="reviews"></div>
+      </div>
+    </aside>
+  </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <!-- CSV parser -->
@@ -25,11 +78,10 @@
     // 👉 Replace with your "Publish to the web (CSV)" link of the mymaps_export tab
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRE7LBwALNw3m9kW1XrGh5QnvFuMI2Z4TT8aAI8JA7v4S8WAb8BUVoKzCZSFMwLivFVBjsKjWZUVxPg/pub?gid=1935701035&single=true&output=csv";
 
-    // --- Map setup ---
+    // --- Map & base layer ---
     const office = { lat: 48.8740172, lng: 2.3105188, name: "Kwerk Saint Honoré" };
-    const map = L.map('map').setView([office.lat, office.lng], 15);
+    const map = L.map('map', { zoomControl: true }).setView([office.lat, office.lng], 15);
 
-    // Nice background: CARTO Light
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' +
@@ -38,11 +90,15 @@
       maxZoom: 20
     }).addTo(map);
 
-    // Add office marker (red circle)
+    // Office marker (distinct)
     const officeMarker = L.circleMarker([office.lat, office.lng], {
       radius: 8, color: '#d33', fillColor: '#d33', fillOpacity: 1, weight: 2
     }).addTo(map).bindPopup(`<b>${office.name}</b>`);
-    enableHoverPinBehavior(officeMarker); // same hover/pin behavior
+    enableHoverPinBehavior(officeMarker);
+
+    // State
+    let markers = [];          // { marker, data }
+    let selectedMarker = null; // the pinned one
 
     // Helpers
     const toNum = v => {
@@ -50,28 +106,104 @@
       return Number.isFinite(n) ? n : null;
     };
 
-    const makePopup = row => {
+    function simplePopup(row) {
       const name = row.restaurant_name || '';
       const addr = row.restaurant_adress || '';
       const avg  = row.avg_rating || '-';
       const cnt  = row.reviews_count || 0;
-      const textReviews = row.reviews_html || ''; // plain text with \n
+      const dist = row.distance_in_min ? `${row.distance_in_min} min` : '';
       return `
-        <b>${name}</b><br/>
-        ${addr}<br/>
-        ⭐ ${avg} (${cnt} avis)<br/><br/>
-        <pre style="white-space:pre-wrap; margin:0;">${textReviews}</pre>
-      `;
-    };
+        <div style="min-width:220px">
+          <b>${name}</b><br/>
+          ${addr}<br/>
+          ⭐ ${avg} (${cnt} avis) ${dist ? ' · 🕒 ' + dist : ''}
+        </div>`;
+    }
+
+    // Accepts plain text with \n OR preformatted HTML; detects tags loosely
+    function renderReviews(htmlOrText) {
+      if (!htmlOrText) return '<div class="muted">Aucun avis pour le moment.</div>';
+      const hasTag = /<\w+[^>]*>/.test(htmlOrText);
+      if (hasTag) return htmlOrText; // already HTML from your export/script
+      // convert plaintext with newlines into paragraphs
+      const safe = String(htmlOrText).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return safe.split(/\n{2,}/).map(block => `<div class="review">${block.replace(/\n/g,'<br/>')}</div>`).join('');
+    }
+
+    function updatePanel(row) {
+      document.getElementById('p-title').innerText = row.restaurant_name || '';
+      const meta = [];
+      if (row.restaurant_adress) meta.push(row.restaurant_adress);
+      const ratingText = `⭐ ${row.avg_rating || '-'} (${row.reviews_count || 0} avis)`;
+      meta.push(ratingText);
+      if (row.distance_in_min) meta.push(`🕒 ${row.distance_in_min} min depuis le bureau`);
+      document.getElementById('p-meta').innerHTML = meta.map(m => `<div>${m}</div>`).join('');
+
+      const pills = [];
+      if (row.food_type) pills.push(`<span class="pill">${row.food_type}</span>`);
+      if (row.price_range) pills.push(`<span class="pill">${row.price_range}</span>`);
+      document.getElementById('p-pills').innerHTML = pills.join(' ');
+
+      document.getElementById('p-reviews').innerHTML = renderReviews(row.reviews_html);
+      document.getElementById('panel').classList.add('active');
+    }
+
+    function clearSelection() {
+      selectedMarker = null;
+      markers.forEach(m => m.marker.getElement()?.classList.remove('dimmed'));
+      document.getElementById('panel').classList.remove('active');
+      // close all popups except maybe office if pinned (we treat office same way)
+      map.closePopup();
+    }
+
+    document.getElementById('p-close').addEventListener('click', clearSelection);
+    map.on('click', (e) => {
+      // clicking empty map area clears selection
+      if (!e.originalEvent.target.closest('.leaflet-marker-icon') &&
+          !e.originalEvent.target.closest('.leaflet-popup')) {
+        clearSelection();
+      }
+    });
 
     // Hover-to-open & click-to-pin behavior for any marker
-    function enableHoverPinBehavior(marker) {
+    function enableHoverPinBehavior(marker, row = null) {
       marker._pinned = false;
-      marker.on('mouseover', function () { this.openPopup(); });
-      marker.on('mouseout', function () { if (!this._pinned) this.closePopup(); });
-      marker.on('click', function () {
-        this._pinned = !this._pinned;
-        if (this._pinned) { this.openPopup(); } else { this.closePopup(); }
+
+      marker.on('mouseover', function () {
+        if (!this._pinned) this.openPopup();
+      });
+      marker.on('mouseout', function () {
+        if (!this._pinned) this.closePopup();
+      });
+      marker.on('click', function (ev) {
+        // Toggle pin
+        const nowPinned = !this._pinned;
+        // Unpin all markers
+        markers.forEach(m => m.marker._pinned = false);
+        officeMarker._pinned = false;
+
+        if (nowPinned) {
+          this._pinned = true;
+          this.openPopup();
+
+          // Dim others
+          markers.forEach(m => {
+            const el = m.marker.getElement();
+            if (!el) return;
+            if (m.marker !== this) el.classList.add('dimmed');
+            else el.classList.remove('dimmed');
+          });
+
+          // Panel details for restaurants only
+          if (row) updatePanel(row);
+          selectedMarker = this;
+        } else {
+          // Unpin → undim all & hide panel
+          clearSelection();
+        }
+
+        // Prevent map click from also firing
+        ev.originalEvent?.stopPropagation?.();
       });
     }
 
@@ -83,19 +215,24 @@
       complete: function(results) {
         const data = results.data || [];
         let placed = 0;
+        const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
 
         data.forEach(row => {
           const lat = toNum(row.lat);
           const lng = toNum(row.long);
           if (lat == null || lng == null) return;
 
-          const marker = L.marker([lat, lng]).addTo(map).bindPopup(makePopup(row));
-          enableHoverPinBehavior(marker);
+          const marker = L.marker([lat, lng]).addTo(map).bindPopup(simplePopup(row));
+          enableHoverPinBehavior(marker, row);
+          markers.push({ marker, data: row });
+          bounds.extend([lat, lng]);
           placed++;
         });
 
-        if (!placed) {
-          console.warn("Aucun point valide trouvé dans le CSV. La carte reste centrée sur le bureau.");
+        if (placed > 0) {
+          map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
+        } else {
+          map.setView([office.lat, office.lng], 15);
         }
       },
       error: function(err) {
