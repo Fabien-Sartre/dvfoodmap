@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>DV Food map 🥗​🥙​🍱​🍔​🍕</title>
+  <title>Carte des Restaurants — Digital Value</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -25,7 +25,7 @@
       box-shadow: 0 2px 10px rgba(0,0,0,.08); font-size: 14px; font-weight: 600;
     }
 
-    /* Filters box (compact, left) */
+    /* Filters box */
     #filters {
       position: absolute; z-index: 1001; left: 12px; top: 58px;
       width: 300px; background: var(--bg); border: 1px solid #eee; border-radius: 12px;
@@ -39,10 +39,12 @@
       box-sizing: border-box;
     }
     #filters .actions { display: flex; gap: 8px; align-items: center; }
-    #filters button {
+    #filters button, #filters a.btn {
       border: 0; background: var(--brand); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer;
+      text-decoration: none; display: inline-block; text-align: center;
     }
     #filters .reset { background: #f3f4f6; color: #111827; }
+    #filters .cta { display: grid; gap: 8px; margin-top: 4px; }
 
     /* Multi-select dropdowns (Price / Food) */
     .multiselect { position: relative; }
@@ -53,9 +55,14 @@
     .ms-panel {
       position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1200;
       background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.08);
-      padding: 8px; display: none; max-height: 220px; overflow: auto;
+      padding: 8px; display: none; max-height: 260px; overflow: auto;
     }
     .multiselect.open .ms-panel { display: block; }
+    .ms-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px;
+      font-size: 12px; color: var(--muted);
+    }
+    .ms-head .link { color: var(--brand); cursor: pointer; }
     .ms-opt { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 14px; }
     .ms-count { color: var(--muted); font-size: 12px; }
 
@@ -111,7 +118,7 @@
     .dimmed   { filter: grayscale(100%) opacity(0.35); }
     .highlight{ filter: drop-shadow(0 0 8px var(--brand)) saturate(1.15); transform: scale(1.06); }
 
-    /* Keep zoom control visible: move it to bottom-left */
+    /* Keep zoom control visible (bottom-left) */
     .leaflet-bottom.leaflet-left { margin-left: 12px; margin-bottom: 12px; }
   </style>
 </head>
@@ -148,7 +155,16 @@
             <span id="ms-price-label">Prix</span>
             <span class="ms-count" id="ms-price-count"></span>
           </div>
-          <div class="ms-panel" id="ms-price-panel"></div>
+          <div class="ms-panel" id="ms-price-panel">
+            <div class="ms-head">
+              <span>Prix</span>
+              <span>
+                <span class="link" id="price-select-all">Tout</span> ·
+                <span class="link" id="price-select-none">Aucun</span>
+              </span>
+            </div>
+            <!-- options injected -->
+          </div>
         </div>
       </div>
 
@@ -159,13 +175,34 @@
             <span id="ms-food-label">Type de cuisine</span>
             <span class="ms-count" id="ms-food-count"></span>
           </div>
-          <div class="ms-panel" id="ms-food-panel"></div>
+          <div class="ms-panel" id="ms-food-panel">
+            <div class="ms-head">
+              <span>Type de cuisine</span>
+              <span>
+                <span class="link" id="food-select-all">Tout</span> ·
+                <span class="link" id="food-select-none">Aucun</span>
+              </span>
+            </div>
+            <!-- options injected -->
+          </div>
         </div>
       </div>
 
       <div class="actions">
         <button id="f-zoom">Zoom sur les résultats</button>
         <button id="f-reset" class="reset">Réinitialiser</button>
+      </div>
+
+      <!-- CTAs to Forms -->
+      <div class="cta">
+        <a class="btn" target="_blank" rel="noopener"
+           href="https://docs.google.com/forms/d/e/1FAIpQLScCMY-av6uPlNI6kqnJZi4hRwDdkeaNYb5-VruNraSp42rg0Q/viewform?usp=dialog">
+          ➕ Ajouter un restaurant
+        </a>
+        <a class="btn" target="_blank" rel="noopener"
+           href="https://docs.google.com/forms/d/e/1FAIpQLScCMY-av6uPlNI6kqnJZi4hRwDdkeaNYb5-VruNraSp42rg0Q/viewform?usp=dialog">
+          ✍️ Laisser un avis
+        </a>
       </div>
     </div>
 
@@ -194,7 +231,8 @@
 
     // --- Map (zoom controls bottom-left) & base layer ---
     const office = { lat: 48.8740172, lng: 2.3105188, name: "Kwerk Saint Honoré" };
-    const map = L.map('map', { zoomControl: false }).setView([office.lat, office.lng], 15);
+    const defaultZoom = 15;
+    const map = L.map('map', { zoomControl: false }).setView([office.lat, office.lng], defaultZoom);
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -264,7 +302,6 @@
 
     function clearSelection() {
       selectedMarker = null;
-      // Remove highlight; keep current dim state (filters control dim)
       all.markers.forEach(m => m.marker.getElement()?.classList.remove('highlight'));
       document.getElementById('panel').classList.remove('active');
       map.closePopup();
@@ -287,13 +324,12 @@
         const el = this.getElement();
         const nowPinned = !this._pinned;
 
-        // Unpin all (remove highlight class)
         all.markers.forEach(m => { m.marker._pinned = false; m.marker.getElement()?.classList.remove('highlight'); });
 
         if (nowPinned) {
           this._pinned = true;
           this.openPopup();
-          el?.classList.add('highlight');     // highlight only the clicked marker
+          el?.classList.add('highlight');
           if (row) updatePanel(row);
           selectedMarker = this;
         } else {
@@ -309,14 +345,21 @@
     const elAC       = document.getElementById('ac');
     const elRange    = document.getElementById('f-distance');
     const elRangeVal = document.getElementById('f-distance-val');
-    const msPrice    = document.getElementById('ms-price');
-    const msPriceTrig= document.querySelector('#ms-price .ms-trigger');
-    const msPricePanel = document.getElementById('ms-price-panel');
-    const msPriceCount = document.getElementById('ms-price-count');
-    const msFood     = document.getElementById('ms-food');
-    const msFoodTrig = document.querySelector('#ms-food .ms-trigger');
-    const msFoodPanel= document.getElementById('ms-food-panel');
-    const msFoodCount= document.getElementById('ms-food-count');
+
+    const msPrice       = document.getElementById('ms-price');
+    const msPriceTrig   = msPrice.querySelector('.ms-trigger');
+    const msPricePanel  = document.getElementById('ms-price-panel');
+    const msPriceCount  = document.getElementById('ms-price-count');
+    const priceSelectAll= document.getElementById('price-select-all');
+    const priceSelectNone=document.getElementById('price-select-none');
+
+    const msFood        = document.getElementById('ms-food');
+    const msFoodTrig    = msFood.querySelector('.ms-trigger');
+    const msFoodPanel   = document.getElementById('ms-food-panel');
+    const msFoodCount   = document.getElementById('ms-food-count');
+    const foodSelectAll = document.getElementById('food-select-all');
+    const foodSelectNone= document.getElementById('food-select-none');
+
     const elZoomBtn  = document.getElementById('f-zoom');
     const elResetBtn = document.getElementById('f-reset');
 
@@ -338,7 +381,9 @@
     });
 
     function renderMS(panel, values, selectedSet, countEl) {
-      panel.innerHTML = '';
+      // Remove old options (keep header)
+      panel.querySelectorAll('.ms-opt').forEach(n => n.remove());
+
       values.forEach(v => {
         const id = `${panel.id}-${v}`;
         const row = document.createElement('label');
@@ -347,14 +392,21 @@
         panel.appendChild(row);
         row.querySelector('input').addEventListener('change', (ev) => {
           if (ev.target.checked) selectedSet.add(v); else selectedSet.delete(v);
-          countEl.textContent = selectedSet.size ? `(${selectedSet.size})` : '';
+          updateMSCount(countEl, selectedSet, values);
           applyFilters(true);
         });
       });
-      countEl.textContent = selectedSet.size ? `(${selectedSet.size})` : '';
+
+      updateMSCount(countEl, selectedSet, values);
     }
 
-    // Distance slider label
+    function updateMSCount(countEl, selectedSet, values) {
+      if (selectedSet.size === 0) countEl.textContent = ''; // no filter
+      else if (selectedSet.size === values.length) countEl.textContent = '(tous)';
+      else countEl.textContent = `(${selectedSet.size})`;
+    }
+
+    // Distance slider
     function updateSliderLabel() {
       const v = parseInt(elRange.value,10);
       elRangeVal.textContent = '≤ ' + v;
@@ -399,14 +451,39 @@
       applyFilters(true);
     });
 
+    // Select all/none handlers
+    priceSelectAll.addEventListener('click', () => {
+      priceValues.forEach(v => selectedPrices.add(v));
+      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
+      applyFilters(true);
+    });
+    priceSelectNone.addEventListener('click', () => {
+      selectedPrices.clear();
+      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
+      applyFilters(true);
+    });
+    foodSelectAll.addEventListener('click', () => {
+      foodValues.forEach(v => selectedFoods.add(v));
+      renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
+      applyFilters(true);
+    });
+    foodSelectNone.addEventListener('click', () => {
+      selectedFoods.clear();
+      renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
+      applyFilters(true);
+    });
+
     // Reset & Zoom
     elResetBtn.addEventListener('click', () => {
+      // Clear filters
       elSearch.value = ''; elAC.style.display='none'; selectedKeys.clear(); renderTokens();
       elRange.value = 30; updateSliderLabel();
       selectedPrices.clear(); selectedFoods.clear();
       renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
       renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
+      // Apply + reset selection and zoom
       applyFilters(true);
+      map.setView([office.lat, office.lng], defaultZoom);
     });
     elZoomBtn.addEventListener('click', () => fitToFiltered());
 
@@ -424,23 +501,20 @@
         }
       }
 
-      // Distance (rows without distance are treated as "infinite")
+      // Distance (rows without distance are treated as not matching unless slider is 30)
       const maxMin = parseInt(elRange.value, 10); // 0..30
-      if (!isNaN(maxMin)) {
-        const d = parseInt(row.distance_in_min, 10);
-        if (isNaN(d) || d > maxMin) return false;
+      const d = parseInt(row.distance_in_min, 10);
+      if (isNaN(d)) {
+        if (maxMin < 30) return false; // include unknown distance only when slider at max
+      } else if (d > maxMin) {
+        return false;
       }
 
       // Price multi-select
-      if (selectedPrices.size) {
-        const pr = String(row.price_range || '').trim();
-        if (!selectedPrices.has(pr)) return false;
-      }
+      if (selectedPrices.size && !selectedPrices.has(String(row.price_range || '').trim())) return false;
       // Food multi-select
-      if (selectedFoods.size) {
-        const ft = String(row.food_type || '').trim();
-        if (!selectedFoods.has(ft)) return false;
-      }
+      if (selectedFoods.size && !selectedFoods.has(String(row.food_type || '').trim())) return false;
+
       return true;
     }
 
@@ -461,7 +535,7 @@
     function fitToFiltered() {
       const bounds = L.latLngBounds();
       let added = 0;
-      all.markers.forEach(({ marker, data }) => {
+      all.markers.forEach(({ marker }) => {
         const el = marker.getElement();
         if (el && !el.classList.contains('dimmed')) {
           bounds.extend(marker.getLatLng());
@@ -510,10 +584,10 @@
         if (all.markers.length) {
           map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
         } else {
-          map.setView([office.lat, office.lng], 15);
+          map.setView([office.lat, office.lng], defaultZoom);
         }
 
-        // Initial filter (none) just to ensure classes are in a known state
+        // Initial state
         updateSliderLabel();
         applyFilters(false);
       },
