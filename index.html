@@ -258,7 +258,7 @@
     }).addTo(map);
 
     // Office marker (red, solid)
-    const officeMarker = L.circleMarker([office.lat, office.lng], {
+    const officeMarker = L.Marker([office.lat, office.lng], {
       radius: 8, color: '#d33', fillColor: '#d33', fillOpacity: 1, weight: 2
     }).addTo(map).bindPopup(`<b>${office.name}</b>`);
 
@@ -570,7 +570,7 @@
           const defaultStyle = { radius: 7, color: '#0b57d0', weight: 2, fillColor: '#0b57d0', fillOpacity: 1 };
           const highlightStyle= { radius: 9, color: '#0b57d0', weight: 3, fillColor: '#0b57d0', fillOpacity: 1 };
 
-          const marker = L.circleMarker([lat, lng], defaultStyle).addTo(map).bindPopup(simplePopup(row));
+          const marker = L.Marker([lat, lng], defaultStyle).addTo(map).bindPopup(simplePopup(row));
           enableHoverPinBehavior(marker, row, defaultStyle, highlightStyle);
           all.markers.push({ marker, data: row, key: keyOf(row), defaultStyle });
           bounds.extend([lat, lng]);
