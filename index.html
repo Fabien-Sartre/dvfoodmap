@@ -9,7 +9,7 @@
   <style>
     :root {
       --panel-width: 380px;
-      --brand: #0f6fff;
+      --brand: #0b57d0;
       --muted: #6b7280;
       --bg: #ffffff;
     }
@@ -18,11 +18,11 @@
     #map { height: 100%; width: 100%; }
     .leaflet-popup-content { font-size: 14px; line-height: 1.35; }
 
-    /* Title chip */
-    .subtitle {
+    /* Title chip (top-left) */
+    .titlechip {
       position: absolute; z-index: 1000; left: 12px; top: 12px;
       background: rgba(255,255,255,.95); padding: 8px 12px; border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,.08); font-size: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.08); font-size: 14px; font-weight: 600;
     }
 
     /* Filters box (compact, left) */
@@ -36,18 +36,51 @@
     #filters .row { display: grid; gap: 6px; }
     #filters input[type="text"], #filters select {
       width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;
+      box-sizing: border-box;
     }
-    #filters .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    #filters .chip {
-      cursor: pointer; user-select: none;
-      background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 999px; padding: 4px 10px; font-size: 12px;
-    }
-    #filters .chip.active { background: #e8f0ff; border-color: #c7dcff; color: #0b57d0; }
     #filters .actions { display: flex; gap: 8px; align-items: center; }
     #filters button {
-      border: 0; background: #0b57d0; color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer;
+      border: 0; background: var(--brand); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer;
     }
     #filters .reset { background: #f3f4f6; color: #111827; }
+
+    /* Multi-select dropdowns (Price / Food) */
+    .multiselect { position: relative; }
+    .ms-trigger {
+      display: flex; justify-content: space-between; align-items: center;
+      border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; cursor: pointer; background: #fff;
+    }
+    .ms-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1200;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      padding: 8px; display: none; max-height: 220px; overflow: auto;
+    }
+    .multiselect.open .ms-panel { display: block; }
+    .ms-opt { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 14px; }
+    .ms-count { color: var(--muted); font-size: 12px; }
+
+    /* Search with autocomplete + tokens */
+    .tokenbox { position: relative; }
+    .tokenlist {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;
+    }
+    .token {
+      background: #e8f0ff; color: #0b57d0; border: 1px solid #c7dcff; border-radius: 999px; padding: 4px 8px; font-size: 12px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .token .x { cursor: pointer; }
+    .ac-list {
+      position: absolute; left: 0; right: 0; top: 100%; z-index: 1200;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      max-height: 240px; overflow: auto; display: none;
+    }
+    .ac-item { padding: 8px 10px; cursor: pointer; }
+    .ac-item:hover { background: #f3f4f6; }
+
+    /* Distance slider */
+    .sliderrow { display: grid; gap: 6px; }
+    .sliderwrap { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    input[type="range"] { width: 100%; }
 
     /* Side panel (details) */
     #panel {
@@ -74,48 +107,62 @@
     .review:last-child { border-bottom: 0; }
     .muted { color: var(--muted); }
 
-    /* Dim non-selected markers */
-    .dimmed { filter: grayscale(100%) opacity(0.35); }
+    /* Marker visual states */
+    .dimmed   { filter: grayscale(100%) opacity(0.35); }
+    .highlight{ filter: drop-shadow(0 0 8px var(--brand)) saturate(1.15); transform: scale(1.06); }
+
+    /* Keep zoom control visible: move it to bottom-left */
+    .leaflet-bottom.leaflet-left { margin-left: 12px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
   <div id="app">
     <div id="map"></div>
 
-    <div class="subtitle">DV Food map 🥗​🥙​🍱​🍔​🍕</div>
+    <div class="titlechip">Carte des restaurants — Digital Value</div>
 
     <!-- Filters box -->
     <div id="filters">
       <h3>Filtres</h3>
-      <div class="row">
-        <input id="f-search" type="text" placeholder="Rechercher (nom, adresse)…" />
+
+      <!-- Search with autocomplete & tokens -->
+      <div class="row tokenbox">
+        <div id="tok-container" class="tokenlist"></div>
+        <input id="f-search" type="text" placeholder="Rechercher ou sélectionner un resto…" autocomplete="off" />
+        <div id="ac" class="ac-list"></div>
       </div>
-      <div class="row">
+
+      <!-- Distance slider -->
+      <div class="row sliderrow">
         <label for="f-distance">Temps depuis le bureau</label>
-        <select id="f-distance">
-          <option value="">Tous</option>
-          <option value="5">≤ 5 min</option>
-          <option value="10">≤ 10 min</option>
-          <option value="15">≤ 15 min</option>
-          <option value="20">≤ 20 min</option>
-          <option value="30">≤ 30 min</option>
-        </select>
-      </div>
-      <div class="row">
-        <div>Prix</div>
-        <div id="f-price" class="chips">
-          <div class="chip" data-val="€">€</div>
-          <div class="chip" data-val="€€">€€</div>
-          <div class="chip" data-val="€€€">€€€</div>
+        <div class="sliderwrap">
+          <input id="f-distance" type="range" min="0" max="30" step="1" value="30" />
+          <div><span id="f-distance-val">≤ 30</span> min</div>
         </div>
       </div>
+
+      <!-- Price multi-select -->
       <div class="row">
-        <label for="f-food">Type de cuisine</label>
-        <select id="f-food">
-          <option value="">Toutes</option>
-          <!-- options filled dynamically -->
-        </select>
+        <div class="multiselect" id="ms-price">
+          <div class="ms-trigger" data-label="Prix">
+            <span id="ms-price-label">Prix</span>
+            <span class="ms-count" id="ms-price-count"></span>
+          </div>
+          <div class="ms-panel" id="ms-price-panel"></div>
+        </div>
       </div>
+
+      <!-- Food type multi-select -->
+      <div class="row">
+        <div class="multiselect" id="ms-food">
+          <div class="ms-trigger" data-label="Type de cuisine">
+            <span id="ms-food-label">Type de cuisine</span>
+            <span class="ms-count" id="ms-food-count"></span>
+          </div>
+          <div class="ms-panel" id="ms-food-panel"></div>
+        </div>
+      </div>
+
       <div class="actions">
         <button id="f-zoom">Zoom sur les résultats</button>
         <button id="f-reset" class="reset">Réinitialiser</button>
@@ -145,9 +192,10 @@
     // 👉 Replace with your Publish-to-web CSV of 'mymaps_export'
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRE7LBwALNw3m9kW1XrGh5QnvFuMI2Z4TT8aAI8JA7v4S8WAb8BUVoKzCZSFMwLivFVBjsKjWZUVxPg/pub?gid=1935701035&single=true&output=csv";
 
-    // --- Map & base layer ---
+    // --- Map (zoom controls bottom-left) & base layer ---
     const office = { lat: 48.8740172, lng: 2.3105188, name: "Kwerk Saint Honoré" };
-    const map = L.map('map', { zoomControl: true }).setView([office.lat, office.lng], 15);
+    const map = L.map('map', { zoomControl: false }).setView([office.lat, office.lng], 15);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution:
@@ -161,10 +209,9 @@
     const officeMarker = L.circleMarker([office.lat, office.lng], {
       radius: 8, color: '#d33', fillColor: '#d33', fillOpacity: 1, weight: 2
     }).addTo(map).bindPopup(`<b>${office.name}</b>`);
-    enableHoverPinBehavior(officeMarker);
 
     // State
-    const all = { data: [], markers: [] };
+    const all = { data: [], markers: [] }; // { marker, data, key }
     let selectedMarker = null;
 
     // Helpers
@@ -173,6 +220,7 @@
       return Number.isFinite(n) ? n : null;
     };
     const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    const keyOf = r => `${(r.restaurant_name||'').trim()} — ${(r.restaurant_adress||'').trim()}`;
 
     function simplePopup(row) {
       const name = row.restaurant_name || '';
@@ -216,7 +264,8 @@
 
     function clearSelection() {
       selectedMarker = null;
-      all.markers.forEach(m => m.marker.getElement()?.classList.remove('dimmed'));
+      // Remove highlight; keep current dim state (filters control dim)
+      all.markers.forEach(m => m.marker.getElement()?.classList.remove('highlight'));
       document.getElementById('panel').classList.remove('active');
       map.closePopup();
     }
@@ -235,22 +284,16 @@
       marker.on('mouseover', function () { if (!this._pinned) this.openPopup(); });
       marker.on('mouseout',  function () { if (!this._pinned) this.closePopup(); });
       marker.on('click', function (ev) {
+        const el = this.getElement();
         const nowPinned = !this._pinned;
-        all.markers.forEach(m => m.marker._pinned = false);
-        officeMarker._pinned = false;
+
+        // Unpin all (remove highlight class)
+        all.markers.forEach(m => { m.marker._pinned = false; m.marker.getElement()?.classList.remove('highlight'); });
 
         if (nowPinned) {
           this._pinned = true;
           this.openPopup();
-
-          // Dim others
-          all.markers.forEach(m => {
-            const el = m.marker.getElement();
-            if (!el) return;
-            if (m.marker !== this && map.hasLayer(m.marker)) el.classList.add('dimmed');
-            else el.classList.remove('dimmed');
-          });
-
+          el?.classList.add('highlight');     // highlight only the clicked marker
           if (row) updatePanel(row);
           selectedMarker = this;
         } else {
@@ -260,97 +303,177 @@
       });
     }
 
-    // ---- Filters ----
+    // ---------- FILTERS UI ----------
     const elSearch   = document.getElementById('f-search');
-    const elDistance = document.getElementById('f-distance');
-    const elPriceBox = document.getElementById('f-price');
-    const elFood     = document.getElementById('f-food');
+    const elTokBox   = document.getElementById('tok-container');
+    const elAC       = document.getElementById('ac');
+    const elRange    = document.getElementById('f-distance');
+    const elRangeVal = document.getElementById('f-distance-val');
+    const msPrice    = document.getElementById('ms-price');
+    const msPriceTrig= document.querySelector('#ms-price .ms-trigger');
+    const msPricePanel = document.getElementById('ms-price-panel');
+    const msPriceCount = document.getElementById('ms-price-count');
+    const msFood     = document.getElementById('ms-food');
+    const msFoodTrig = document.querySelector('#ms-food .ms-trigger');
+    const msFoodPanel= document.getElementById('ms-food-panel');
+    const msFoodCount= document.getElementById('ms-food-count');
     const elZoomBtn  = document.getElementById('f-zoom');
     const elResetBtn = document.getElementById('f-reset');
 
-    function getActivePrices() {
-      return Array.from(elPriceBox.querySelectorAll('.chip.active')).map(ch => ch.dataset.val);
+    // Multi-select state
+    const selectedPrices = new Set();
+    const selectedFoods  = new Set();
+    const selectedKeys   = new Set(); // restaurant tokens
+
+    function toggleMS(container, open) {
+      if (open === undefined) container.classList.toggle('open');
+      else container.classList.toggle('open', open);
     }
-    elPriceBox.addEventListener('click', (e) => {
-      const chip = e.target.closest('.chip');
-      if (!chip) return;
-      chip.classList.toggle('active');
-      applyFilters();
+    msPriceTrig.addEventListener('click', () => toggleMS(msPrice));
+    msFoodTrig.addEventListener('click', () => toggleMS(msFood));
+    document.addEventListener('click', (e) => {
+      if (!msPrice.contains(e.target)) toggleMS(msPrice, false);
+      if (!msFood.contains(e.target))  toggleMS(msFood, false);
+      if (!elAC.contains(e.target) && e.target !== elSearch) elAC.style.display = 'none';
     });
 
-    [elSearch, elDistance, elFood].forEach(el => {
-      el.addEventListener('input', applyFilters);
-      el.addEventListener('change', applyFilters);
-    });
+    function renderMS(panel, values, selectedSet, countEl) {
+      panel.innerHTML = '';
+      values.forEach(v => {
+        const id = `${panel.id}-${v}`;
+        const row = document.createElement('label');
+        row.className = 'ms-opt';
+        row.innerHTML = `<input type="checkbox" id="${id}" ${selectedSet.has(v)?'checked':''} /> <span>${v}</span>`;
+        panel.appendChild(row);
+        row.querySelector('input').addEventListener('change', (ev) => {
+          if (ev.target.checked) selectedSet.add(v); else selectedSet.delete(v);
+          countEl.textContent = selectedSet.size ? `(${selectedSet.size})` : '';
+          applyFilters(true);
+        });
+      });
+      countEl.textContent = selectedSet.size ? `(${selectedSet.size})` : '';
+    }
 
-    elResetBtn.addEventListener('click', () => {
+    // Distance slider label
+    function updateSliderLabel() {
+      const v = parseInt(elRange.value,10);
+      elRangeVal.textContent = '≤ ' + v;
+    }
+    elRange.addEventListener('input', () => { updateSliderLabel(); applyFilters(false); });
+
+    // Tokens (selected restaurants)
+    function renderTokens() {
+      elTokBox.innerHTML = '';
+      selectedKeys.forEach(k => {
+        const div = document.createElement('div');
+        div.className = 'token';
+        div.innerHTML = `<span>${k}</span> <span class="x" title="Retirer">×</span>`;
+        div.querySelector('.x').addEventListener('click', () => { selectedKeys.delete(k); renderTokens(); applyFilters(true); });
+        elTokBox.appendChild(div);
+      });
+    }
+
+    // Autocomplete
+    function updateACList() {
+      const q = norm(elSearch.value);
+      if (!q) { elAC.style.display = 'none'; elAC.innerHTML=''; return; }
+      const options = all.data
+        .map(r => ({ key: keyOf(r), hay: norm(keyOf(r)) }))
+        .filter(o => o.hay.includes(q) && !selectedKeys.has(o.key))
+        .slice(0, 20);
+
+      if (!options.length) { elAC.style.display = 'none'; elAC.innerHTML=''; return; }
+
+      elAC.innerHTML = options.map(o => `<div class="ac-item" data-key="${o.key}">${o.key}</div>`).join('');
+      elAC.style.display = 'block';
+    }
+    elSearch.addEventListener('input', updateACList);
+    elAC.addEventListener('click', (e) => {
+      const item = e.target.closest('.ac-item');
+      if (!item) return;
+      const k = item.dataset.key;
+      selectedKeys.add(k);
       elSearch.value = '';
-      elDistance.value = '';
-      elFood.value = '';
-      elPriceBox.querySelectorAll('.chip.active').forEach(ch => ch.classList.remove('active'));
+      elAC.style.display = 'none';
+      renderTokens();
       applyFilters(true);
     });
 
-    elZoomBtn.addEventListener('click', () => fitToVisible());
+    // Reset & Zoom
+    elResetBtn.addEventListener('click', () => {
+      elSearch.value = ''; elAC.style.display='none'; selectedKeys.clear(); renderTokens();
+      elRange.value = 30; updateSliderLabel();
+      selectedPrices.clear(); selectedFoods.clear();
+      renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
+      renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
+      applyFilters(true);
+    });
+    elZoomBtn.addEventListener('click', () => fitToFiltered());
 
+    // ---------- Filtering logic (GREY OUT, not hide) ----------
     function passFilters(row) {
-      // Search: in name or address
-      const q = norm(elSearch.value);
-      if (q) {
-        const hay = norm((row.restaurant_name || '') + ' ' + (row.restaurant_adress || ''));
-        if (!hay.includes(q)) return false;
+      // If specific restaurants selected (tokens), only those match
+      if (selectedKeys.size) {
+        if (!selectedKeys.has(keyOf(row))) return false;
+      } else {
+        // Text query (when no tokens)
+        const q = norm(elSearch.value);
+        if (q) {
+          const hay = norm((row.restaurant_name||'') + ' ' + (row.restaurant_adress||''));
+          if (!hay.includes(q)) return false;
+        }
       }
-      // Distance
-      const maxMin = parseInt(elDistance.value, 10);
+
+      // Distance (rows without distance are treated as "infinite")
+      const maxMin = parseInt(elRange.value, 10); // 0..30
       if (!isNaN(maxMin)) {
         const d = parseInt(row.distance_in_min, 10);
         if (isNaN(d) || d > maxMin) return false;
       }
-      // Price (chips are OR, but if none selected -> no filter)
-      const prices = getActivePrices();
-      if (prices.length) {
-        if (!prices.includes(String(row.price_range || '').trim())) return false;
-      }
-      // Food type
-      const ft = elFood.value;
-      if (ft && String(row.food_type || '') !== ft) return false;
 
+      // Price multi-select
+      if (selectedPrices.size) {
+        const pr = String(row.price_range || '').trim();
+        if (!selectedPrices.has(pr)) return false;
+      }
+      // Food multi-select
+      if (selectedFoods.size) {
+        const ft = String(row.food_type || '').trim();
+        if (!selectedFoods.has(ft)) return false;
+      }
       return true;
     }
 
     function applyFilters(resetSelection = false) {
       if (resetSelection) clearSelection();
 
-      let anyVisible = false;
-      const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
-
       all.markers.forEach(({ marker, data }) => {
-        const show = passFilters(data);
-        if (show) {
-          if (!map.hasLayer(marker)) marker.addTo(map);
-          const el = marker.getElement(); if (el) el.classList.remove('dimmed');
-          bounds.extend(marker.getLatLng());
-          anyVisible = true;
+        const el = marker.getElement();
+        if (!el) return;
+        if (passFilters(data)) {
+          el.classList.remove('dimmed');
         } else {
-          if (map.hasLayer(marker)) map.removeLayer(marker);
+          el.classList.add('dimmed');
         }
       });
-
-      if (!anyVisible) {
-        // keep current view; nothing to fit
-      }
     }
 
-    function fitToVisible() {
+    function fitToFiltered() {
       const bounds = L.latLngBounds();
       let added = 0;
-      all.markers.forEach(({ marker }) => {
-        if (map.hasLayer(marker)) { bounds.extend(marker.getLatLng()); added++; }
+      all.markers.forEach(({ marker, data }) => {
+        const el = marker.getElement();
+        if (el && !el.classList.contains('dimmed')) {
+          bounds.extend(marker.getLatLng());
+          added++;
+        }
       });
       if (added > 0) map.fitBounds(bounds.pad(0.1), { maxZoom: 17 });
     }
 
-    // ---- Load CSV & plot markers ----
+    // ---------- Load CSV & init UI ----------
+    let priceValues = []; let foodValues = [];
+
     Papa.parse(csvUrl, {
       download: true,
       header: true,
@@ -359,17 +482,19 @@
         const data = results.data || [];
         all.data = data;
 
-        // Populate food types
-        const types = Array.from(new Set(
+        // Gather unique values from data
+        priceValues = Array.from(new Set(
+          data.map(r => String(r.price_range || '').trim()).filter(Boolean)
+        )).sort((a,b) => a.length - b.length || a.localeCompare(b));
+        foodValues = Array.from(new Set(
           data.map(r => String(r.food_type || '').trim()).filter(Boolean)
         )).sort((a,b) => a.localeCompare(b));
-        types.forEach(t => {
-          const opt = document.createElement('option');
-          opt.value = t; opt.textContent = t;
-          elFood.appendChild(opt);
-        });
 
-        // Markers
+        // Render multi-select panels
+        renderMS(msPricePanel, priceValues, selectedPrices, msPriceCount);
+        renderMS(msFoodPanel,  foodValues,  selectedFoods,  msFoodCount);
+
+        // Create markers
         const bounds = L.latLngBounds([ [office.lat, office.lng] ]);
         data.forEach(row => {
           const lat = toNum(row.lat);
@@ -378,7 +503,7 @@
 
           const marker = L.marker([lat, lng]).addTo(map).bindPopup(simplePopup(row));
           enableHoverPinBehavior(marker, row);
-          all.markers.push({ marker, data: row });
+          all.markers.push({ marker, data: row, key: keyOf(row) });
           bounds.extend([lat, lng]);
         });
 
@@ -387,13 +512,15 @@
         } else {
           map.setView([office.lat, office.lng], 15);
         }
+
+        // Initial filter (none) just to ensure classes are in a known state
+        updateSliderLabel();
+        applyFilters(false);
       },
       error: function(err) {
         console.error("Erreur de chargement du CSV:", err);
       }
     });
-
-    // ---- Panel & selection are already defined above ----
   </script>
 </body>
 </html>
