@@ -917,7 +917,6 @@
         renderMS(msFoodPanel, foodValues, selectedFoods, msFoodCount);
         addPanelEventIsolation();
 
-        const bounds=L.latLngBounds([[office.lat,office.lng]]);
         data.forEach(row=>{
           const lat=toNum(row.lat), lng=toNum(row.long);
           if(lat==null || lng==null) return;
@@ -925,7 +924,6 @@
           const marker=L.marker([lat,lng],{icon}).addTo(map).bindPopup(simplePopup(row));
           enableHoverPinBehavior(marker,row);
           all.markers.push({marker,data:row,key:keyOf(row)});
-          bounds.extend([lat,lng]);
         });
 
         if(all.markers.length) map.fitBounds(bounds.pad(0.1),{maxZoom:17});
